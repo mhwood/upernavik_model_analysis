@@ -35,7 +35,6 @@ def reproject_polygon(polygon_array, inputCRS, outputCRS, x_column=0, y_column=1
     output_polygon[:, y_column] = y2
     return output_polygon
 
-
 def read_model_domain(config_dir, model_name):
     ds = nc4.Dataset(os.path.join(config_dir, 'nc_grids',
                                   model_name + '_grid.nc'))
@@ -45,7 +44,6 @@ def read_model_domain(config_dir, model_name):
     ds.close()
 
     return (XC, YC, Depth)
-
 
 def get_domain_extents(config_dir, domain_name):
     if domain_name == 'West Greenland':
@@ -70,8 +68,8 @@ def get_domain_extents(config_dir, domain_name):
 
 def interpolate_chl_to_model_grid(Lon, Lat, X, Y):
 
-    chl_file = '/Users/mike/Documents/Research/Data Repository/Global/Chlorophyll/' \
-               'AQUA_MODIS.20020801_20250831.L3m.MC.CHL.chlor_a.4km.nc'
+    chl_file = '/Users/mhwood/Documents/Research/Data Repository/Global/Chlorophyll/' \
+               'OC-CCI/AQUA_MODIS.20020801_20250831.L3m.MC.CHL.chlor_a.4km.nc'
 
     ds = nc4.Dataset(chl_file, 'r')
 
@@ -85,8 +83,6 @@ def interpolate_chl_to_model_grid(Lon, Lat, X, Y):
     max_lat_index = np.argmin(np.abs(lat - np.min(Lat))) - 1
     min_lat_index = np.argmin(np.abs(lat - np.max(Lat))) + 1
 
-    print(min_lon_index, max_lon_index, min_lat_index, max_lat_index)
-
     lon_subset = lon[min_lon_index:max_lon_index+1]
     lat_subset = lat[min_lat_index:max_lat_index+1]
     chl_subset = chl[min_lat_index:max_lat_index+1, min_lon_index:max_lon_index+1]
@@ -99,12 +95,54 @@ def interpolate_chl_to_model_grid(Lon, Lat, X, Y):
                                 method='linear')
     return chl_interpolated
 
+def interpolate_GEBCO_to_model_grid(Lon, Lat, X, Y):
+
+    gebco_file = '/Users/mhwood/Documents/Research/Data Repository/Global/Bathymetry/GEBCO_2023.nc'
+
+    ds = nc4.Dataset(gebco_file, 'r')
+
+    lon = ds.variables['lon'][:]
+    lat = ds.variables['lat'][:]
+    gebco = ds.variables['elevation'][:]
+    ds.close()
+
+    min_lon_index = np.argmin(np.abs(lon - np.min(Lon))) - 1
+    max_lon_index = np.argmin(np.abs(lon - np.max(Lon))) + 1
+    min_lat_index = np.argmin(np.abs(lat - np.min(Lat))) - 1
+    max_lat_index = np.argmin(np.abs(lat - np.max(Lat))) + 1
+
+    # print(min_lon_index, max_lon_index, min_lat_index, max_lat_index)
+
+    lon_subset = lon[min_lon_index:max_lon_index+1]
+    lat_subset = lat[min_lat_index:max_lat_index+1]
+    gebco = gebco[min_lat_index:max_lat_index+1, min_lon_index:max_lon_index+1]
+
+    skip = 5
+    lon_subset = lon_subset[::skip]
+    lat_subset = lat_subset[::skip]
+    gebco = gebco[::skip, ::skip]
+
+    Lon_subset, Lat_subset = np.meshgrid(lon_subset, lat_subset)
+    points = np.column_stack((Lon_subset.ravel(), Lat_subset.ravel()))
+    reprojected_points = reproject_polygon(points, inputCRS=4326, outputCRS=3413)
+
+    gebco_interpolated = griddata(reprojected_points, gebco.ravel(), (X, Y),
+                                method='linear')
+
+    gebco_interpolated = -gebco_interpolated  # Convert to depth (positive down)
+    gebco_interpolated[gebco_interpolated < 0] = 0  # Set any negative depths to zero
+
+    return gebco_interpolated
+
 def create_global_subset(config_dir, project_dir):
+
+    print('- Creating West Greenland Chlorophyll and Bathymetry Subset...')
 
     extent = get_domain_extents(config_dir, 'West Greenland')
 
-    x = np.arange(extent[0], extent[1]+2000, 2000)
-    y = np.arange(extent[2], extent[3]+2000, 2000)
+    resolution = 1000
+    x = np.arange(extent[0], extent[1]+resolution, resolution)
+    y = np.arange(extent[2], extent[3]+resolution, resolution)
     X, Y = np.meshgrid(x, y)
 
     points_4326 = reproject_polygon(np.column_stack([X.ravel(), Y.ravel()]),
@@ -112,7 +150,12 @@ def create_global_subset(config_dir, project_dir):
     Lon = points_4326[:, 0].reshape(X.shape)
     Lat = points_4326[:, 1].reshape(Y.shape)
 
+    print('    - Interpolating Bathymetry Data...')
+    bathy_interpolated = interpolate_GEBCO_to_model_grid(Lon, Lat, X, Y)
+
+    print('    - Interpolating Chlorophyll Data...')
     chl_interpolated = interpolate_chl_to_model_grid(Lon, Lat, X, Y)
+
 
     subset_file = os.path.join(project_dir, 'Data', 'West_Greenland_Chl_Climatology.nc')
 
@@ -121,10 +164,12 @@ def create_global_subset(config_dir, project_dir):
     ds.createDimension('y', len(y))
 
     chl_var = ds.createVariable('chlor_a', 'f4', ('y', 'x'))
+    bathy_var = ds.createVariable('depth', 'f4', ('y', 'x'))
     x_var = ds.createVariable('x', 'f4', ('x',))
     y_var = ds.createVariable('y', 'f4', ('y',))
 
     chl_var[:, :] = chl_interpolated
+    bathy_var[:, :] = bathy_interpolated
     x_var[:] = x
     y_var[:] = y
     ds.close()
@@ -160,10 +205,12 @@ def create_model_domain_subset(config_dir, project_dir):
     y_var[:] = y
     ds.close()
 
-config_dir = '/Users/mike/Documents/Research/Projects/Ocean_Modeling/Projects/Downscale_Darwin/MITgcm/configurations/downscale_darwin/'
+config_dir = '/Users/mhwood/Documents/Research/Projects/Ocean_Modeling/Projects/Downscale_Darwin/' \
+             'MITgcm/configurations/downscale_darwin/'
 
-project_dir = '/Users/mike/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
 
-# create_global_subset(config_dir, project_dir)
+project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
 
-create_model_domain_subset(config_dir, project_dir)
+create_global_subset(config_dir, project_dir)
+
+# create_model_domain_subset(config_dir, project_dir)

@@ -39,8 +39,8 @@ def series_to_N_points(series,N):
     newSeries = np.vstack([newSeries, series[-1,:]])
     return(newSeries)
 
-def read_transect_from_shapefile(project_dir):
-    file_name = project_dir+'/Map/Shapefiles/Upernavik_N_short_with_ice'
+def read_transect_from_shapefile(project_dir, fjord_name):
+    file_name = project_dir+'/Map/Shapefiles/'+'_'.join(fjord_name.split())+'_short_with_ice'
     sf = shapefile.Reader(file_name)
     points_4326 = np.array(sf.shapes()[0].points)
     points_4326 = series_to_N_points(points_4326,1000)
@@ -56,8 +56,7 @@ def read_transect_from_shapefile(project_dir):
     return(points, points_4326, distance)
 
 def sample_bedmachine_on_shapefile(distance, transect):
-    bedmachine_file = '/Users/mike/Documents/Research/Data Repository/Greenland/' \
-                      'Bathymetry/BedMachine/BedMachineGreenland-v5.nc'
+    bedmachine_file = '/Users/mhwood/Documents/Research/Data Repository/Greenland/Bathymetry/BedMachineGreenland-v5.nc'
     ds = nc4.Dataset(bedmachine_file)
     x = ds.variables['x'][:]
     y = ds.variables['y'][:]
@@ -125,11 +124,12 @@ def create_plotting_polygons(distance, surface, ice_base, bed):
 
     return(bathy_outline, ice_outline)
 
-def save_transect_as_nc(project_dir, transect, transect_4326, distance,
+def save_transect_as_nc(project_dir, fjord_name, transect, transect_4326, distance,
                         surface, ice_base, bed,
                         bathy_outline, ice_outline):
 
-    ds = nc4.Dataset(os.path.join(project_dir,'Data','Upernavik N Fjord Geometry Transect.nc'),'w')
+    ds = nc4.Dataset(os.path.join(project_dir,'Data','Models','Fjord Transects',fjord_name,
+                                  fjord_name+' Fjord Geometry Transect.nc'),'w')
 
     ds.createDimension('distance',len(distance))
     ds.createDimension('bed_outline_len',np.shape(bathy_outline)[0])
@@ -170,18 +170,19 @@ def save_transect_as_nc(project_dir, transect, transect_4326, distance,
     ds.close()
 
 
-project_dir = '/Users/mike/Documents/Research/Projects/Greenland Model Analysis/' \
-              'Fjord/Upernavik/'
+project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
 
-transect, transect_4326, distance = read_transect_from_shapefile(project_dir)
+for fjord_name in ['Upernavik N','Kakivfaat','Ussing Braeer']:
 
-surface, ice_base, bed = sample_bedmachine_on_shapefile(distance, transect)
+    transect, transect_4326, distance = read_transect_from_shapefile(project_dir, fjord_name)
 
-bathy_outline, ice_outline = create_plotting_polygons(distance, surface, ice_base, bed)
+    surface, ice_base, bed = sample_bedmachine_on_shapefile(distance, transect)
 
-save_transect_as_nc(project_dir, transect, transect_4326, distance,
-                        surface, ice_base, bed,
-                        bathy_outline, ice_outline)
+    bathy_outline, ice_outline = create_plotting_polygons(distance, surface, ice_base, bed)
+
+    save_transect_as_nc(project_dir, fjord_name, transect, transect_4326, distance,
+                            surface, ice_base, bed,
+                            bathy_outline, ice_outline)
 
 
 

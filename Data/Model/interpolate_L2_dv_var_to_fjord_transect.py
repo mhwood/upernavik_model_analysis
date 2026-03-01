@@ -45,10 +45,10 @@ def read_model_domain(config_dir, model_name):
 
     return (XC, YC, Depth)
 
-def read_polygons_from_nc(project_dir):
+def read_polygons_from_nc(project_dir, fjord_name):
 
-    ds = nc4.Dataset(os.path.join(project_dir, 'Data','Ocean','Fjord Transects',
-                                  'Upernavik N Fjord Geometry Transect.nc'))
+    ds = nc4.Dataset(os.path.join(project_dir, 'Data','Models','Fjord Transects',
+                                  fjord_name, fjord_name+' Fjord Geometry Transect.nc'))
 
     distance = ds.variables['distance'][:]
     surface = ds.variables['surface'][:]
@@ -72,9 +72,9 @@ def read_polygons_from_nc(project_dir):
 
     return(distance, transect_x, transect_y, surface, ice_polygon, bed_polygon)
 
-def read_fjord_data_from_nc(config_dir, experiment, year, month, var_name):
+def read_fjord_data_from_nc(config_dir, fjord_name, experiment, year, month, var_name):
 
-    file_name = os.path.join(config_dir,'L2','L2_Upernavik', 'results_'+experiment, 'dv', 'Upernavik_N',
+    file_name = os.path.join(config_dir,'L2','L2_Upernavik', 'results_'+experiment, 'dv', '_'.join(fjord_name.split()),
                                 var_name, var_name + '_' + str(year) + f'{month:02d}.nc')
     ds = nc4.Dataset(file_name)
     depth = ds.variables['depths'][:]
@@ -127,9 +127,9 @@ def interpolate_var_to_transect(depth, longitude, latitude, grid,
 
     return(transect_var)
 
-def save_interpolated_transect_to_nc(project_dir, experiment, distance, depth, transect_var, var_name, year, month):
-    output_file = os.path.join(project_dir, 'Data','Ocean','Fjord Transects',
-                               f'Upernavik_N_Fjord_{experiment}_{var_name}_Transect_{year}{month:02d}.nc')
+def save_interpolated_transect_to_nc(project_dir, fjord_name, experiment, distance, depth, transect_var, var_name, year, month):
+    output_file = os.path.join(project_dir, 'Data','Models','Fjord Transects',fjord_name,
+                               '_'.join(fjord_name.split())+f'_Fjord_{experiment}_{var_name}_Transect_{year}{month:02d}.nc')
     ds = nc4.Dataset(output_file, 'w', format='NETCDF4')
 
     ds.createDimension('distance', len(distance))
@@ -144,17 +144,21 @@ def save_interpolated_transect_to_nc(project_dir, experiment, distance, depth, t
     transect_var_nc[:, :] = transect_var
     ds.close()
 
-project_dir = '/Users/mike/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
+# project_dir = '/Users/mike/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
+project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
+
 
 # config_dir = '/Volumes/eqipsermia/downscale_darwin/L2_Disko_Bay'
-config_dir = '/Users/mike/Documents/Research/Projects/Ocean_Modeling/Projects/Downscale_Darwin/' \
-             'MITgcm/configurations/downscale_darwin/'
+# config_dir = '/Users/mike/Documents/Research/Projects/Ocean_Modeling/Projects/Downscale_Darwin/' \
+#              'MITgcm/configurations/downscale_darwin/'
+config_dir = '/Volumes/upernavik/Research/Ocean_Modeling/Projects/Downscale_Darwin/darwin3/' \
+             'configurations/downscale_darwin'
 
-distance, transect_x, transect_y, surface, ice_polygon, bed_polygon = read_polygons_from_nc(project_dir)
 
-year = 2016
-month = 2
-var_name = 'WVEL'
+
+year = 2020
+month = 11
+
 
 XC, YC, Depth = read_model_domain(config_dir, 'L2_Upernavik')
 points = np.column_stack([XC.ravel(), YC.ravel()])
@@ -162,34 +166,35 @@ reprojected_points = reproject_polygon(points, 4326, 3413, x_column=0, y_column=
 X = reprojected_points[:,0].reshape(XC.shape)
 Y = reprojected_points[:,1].reshape(YC.shape)
 
+for fjord_name in ['Upernavik N','Kakivfaat','Ussing Braeer']:
+    distance, transect_x, transect_y, surface, ice_polygon, bed_polygon = read_polygons_from_nc(project_dir, fjord_name)
 
-for experiment in ['iceplume']:#,'control']:
-    for var_name in ['WVEL']:#,'PTRACE02']:
-        depth, longitude, latitude, grid = read_fjord_data_from_nc(config_dir, experiment, year, month, var_name)
+    for experiment in ['baseline','baseline_melange','baseline_iceplume','baseline_melange_iceplume']:
+        for var_name in ['THETA','SALT','PTRACE28']:
+            depth, longitude, latitude, grid = read_fjord_data_from_nc(config_dir, fjord_name, experiment, year, month, var_name)
 
-        transformer = Transformer.from_crs('EPSG:' + str(4326), 'EPSG:' + str(3413))
-        x, y = transformer.transform(latitude.ravel(), longitude.ravel())
+            transformer = Transformer.from_crs('EPSG:' + str(4326), 'EPSG:' + str(3413))
+            x, y = transformer.transform(latitude.ravel(), longitude.ravel())
 
-        transect_var = interpolate_var_to_transect(depth, longitude, latitude, grid,
-                                                    transect_x, transect_y, distance, surface)
+            transect_var = interpolate_var_to_transect(depth, longitude, latitude, grid,
+                                                        transect_x, transect_y, distance, surface)
+
+            save_interpolated_transect_to_nc(project_dir, fjord_name, experiment, distance, depth, transect_var, var_name, year, month)
 
 
 
 
-        save_interpolated_transect_to_nc(project_dir, experiment, distance, depth, transect_var, var_name, year, month)
 
-print(np.min(transect_var), np.max(transect_var))
-
-# Plotting for verification
-plt.figure(figsize=(8,6))
-plt.contourf(distance, -depth, transect_var, levels=20, cmap='viridis')
-plt.colorbar(label=var_name)
-# plt.plot(ice_polygon[:,0], ice_polygon[:,1], 'k-', linewidth=2, label='Ice Shelf')
-plt.plot(bed_polygon[:,0], -1*bed_polygon[:,1], 'k--', linewidth=2, label='Bathy')
-# plt.plot(distance, surface, 'w-', linewidth=2, label='Surface')
-plt.ylim([-1000, 0])
-plt.xlabel('Distance along transect (km)')
-plt.ylabel('Depth (m)')
-plt.title(f'{var_name} along Upernavik N Fjord Transect - {year}-{month:02d}')
-# plt.legend()
-plt.show()
+# # Plotting for verification
+# plt.figure(figsize=(8,6))
+# plt.contourf(distance, -depth, transect_var, levels=20, cmap='viridis')
+# plt.colorbar(label=var_name)
+# # plt.plot(ice_polygon[:,0], ice_polygon[:,1], 'k-', linewidth=2, label='Ice Shelf')
+# plt.plot(bed_polygon[:,0], -1*bed_polygon[:,1], 'k--', linewidth=2, label='Bathy')
+# # plt.plot(distance, surface, 'w-', linewidth=2, label='Surface')
+# plt.ylim([-1000, 0])
+# plt.xlabel('Distance along transect (km)')
+# plt.ylabel('Depth (m)')
+# plt.title(f'{var_name} along Upernavik N Fjord Transect - {year}-{month:02d}')
+# # plt.legend()
+# plt.show()
