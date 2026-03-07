@@ -18,8 +18,18 @@ def read_annual_chl_obs_grid(project_dir, year):
     ds.close()
     return chl, X, Y, dec_yrs
 
+def read_annual_chl_model_timeseries(project_dir, experiment, year, chl_number):
+    chl_file = os.path.join(project_dir, 'Data','Models', 'Chlorophyll',
+                            'Chl'+'{:02d}'.format(chl_number)+'_'+experiment+'_median_timeseries.nc')
+    ds = nc4.Dataset(chl_file)
+    chl = ds.variables['Chl'+'{:02d}'.format(chl_number)][:]
+    dec_yrs = ds.variables['time'][:]
+    ds.close()
+    timeseries = np.column_stack((dec_yrs, chl))
+    timeseries = timeseries[timeseries[:,0]!=0,:]
+    return timeseries
 
-def compute_chl_obs_timeseries(chl, dec_yrs, window_size=5):
+def compute_chl_timeseries(chl, dec_yrs, window_size=5):
 
     chl_timeseries = np.zeros((len(dec_yrs),))
 
@@ -32,29 +42,23 @@ def compute_chl_obs_timeseries(chl, dec_yrs, window_size=5):
 
 
 
+
+
 project_dir = '/Users/mhwood/Documents/Research/Projects/' \
               'Greenland Model Analysis/Fjord/Upernavik'
 
 config_dir = '/Volumes/upernavik/Research/Ocean_Modeling/Projects/Downscale_Darwin/' \
              'darwin3/configurations/downscale_darwin'
 
-chl, X, Y, dec_yrs_2016 = read_annual_chl_obs_grid(project_dir, year=2016)
-chl_timeseries_2016 = compute_chl_obs_timeseries(chl, dec_yrs_2016, window_size=5)
+chl_obs, X, Y, dec_yrs_2021 = read_annual_chl_obs_grid(project_dir, year=2021)
+chl_obs_timeseries_2021 = compute_chl_timeseries(chl_obs, dec_yrs_2021, window_size=5)
 
-chl, X, Y, dec_yrs_2017 = read_annual_chl_obs_grid(project_dir, year=2017)
-chl_timeseries_2017 = compute_chl_obs_timeseries(chl, dec_yrs_2017, window_size=5)
-
-chl, X, Y, dec_yrs_2018 = read_annual_chl_obs_grid(project_dir, year=2018)
-chl_timeseries_2018 = compute_chl_obs_timeseries(chl, dec_yrs_2018, window_size=5)
-
-chl, X, Y, dec_yrs_2019 = read_annual_chl_obs_grid(project_dir, year=2019)
-chl_timeseries_2019 = compute_chl_obs_timeseries(chl, dec_yrs_2019, window_size=5)
+chl_model_timeseries = read_annual_chl_model_timeseries(project_dir, experiment='baseline', year=2021, chl_number=2)
 
 plt.figure(figsize=(10,5))
-plt.plot(dec_yrs_2016-2016, chl_timeseries_2016, '-o')
-plt.plot(dec_yrs_2017-2017, chl_timeseries_2017, '-o')
-plt.plot(dec_yrs_2018-2018, chl_timeseries_2018, '-o')
-plt.plot(dec_yrs_2019-2019, chl_timeseries_2019, '-o')
+
+# plt.plot(dec_yrs_2021-2021, chl_obs_timeseries_2021, 'o')
+plt.plot(chl_model_timeseries[:,0]-2021, chl_model_timeseries[:,1], 'o')
 
 plt.xlabel('Decimal Year')
 plt.ylabel('Mean Chlorophyll (mg m$^{-3}$)')

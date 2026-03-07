@@ -38,7 +38,7 @@ def read_grid_geometry_from_nc(config_dir, model_name):
 
 def compute_mean_timeseries(results_dir, var_name, year, month, hFaC):
 
-    file_path = os.path.join(results_dir, 'daily_snapshot', var_name, var_name + '_' + str(year) + '{:02d}'.format(month) + '.nc')
+    file_path = os.path.join(results_dir, 'daily_mean', var_name, var_name + '_' + str(year) + '{:02d}'.format(month) + '.nc')
     ds = nc4.Dataset(file_path)
     grid = ds.variables[var_name][:, :, :]
     iterations = ds.variables['iterations'][:]
@@ -47,7 +47,7 @@ def compute_mean_timeseries(results_dir, var_name, year, month, hFaC):
     timeseries = np.zeros((np.shape(grid)[0],))
 
     for t in range(np.shape(grid)[0]):
-        level_set = grid[t, :, :]
+        level_set = grid[t, 10, :, :]
         timeseries[t] = np.median(level_set[hFaC[0,:,:]!=0])
 
     return(iterations,timeseries)
@@ -55,7 +55,7 @@ def compute_mean_timeseries(results_dir, var_name, year, month, hFaC):
 
 def write_timeseries_to_nc(project_dir, experiment, var_name, dec_yrs, timeseries):
 
-    output_file = os.path.join(project_dir, 'Data', 'Models', 'Sea Ice',
+    output_file = os.path.join(project_dir, 'Data', 'Models', 'Chlorophyll',
                                var_name +'_'+experiment+ '_median_timeseries.nc')
     ds = nc4.Dataset(output_file,'w')
 
@@ -76,13 +76,13 @@ config_dir = '/Volumes/upernavik/Research/Ocean_Modeling/Projects/' \
 project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
 
 model_name = 'L2_Upernavik'
-var_name = 'Chl'
+var_name = 'Chl01'
 
 XC, YC, Z, Depth, hFaC = read_grid_geometry_from_nc(config_dir, model_name)
 
-years = [2016]
+years = [2021]
 
-experiments = ['control']
+experiments = ['baseline']
 for experiment in experiments:
 
     print('  - Workin on year '+experiment)
@@ -105,10 +105,10 @@ for experiment in experiments:
             start_month = 2
         else:
             start_month = 1
-        for month in range(start_month,11):#13):
+        for month in range(start_month,7):#13):
             print('     - Reading in month '+str(month)+' in year '+str(year))
 
-            month_iterations, month_timeseries = compute_median_timeseries(results_dir, var_name, year, month, hFaC)
+            month_iterations, month_timeseries = compute_mean_timeseries(results_dir, var_name, year, month, hFaC)
             # plt.plot(month_iterations, month_timeseries)
             # plt.show()
 

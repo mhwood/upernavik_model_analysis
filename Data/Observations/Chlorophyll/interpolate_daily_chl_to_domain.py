@@ -156,7 +156,6 @@ config_dir = '/Users/mhwood/Documents/Research/Projects/Ocean_Modelling/Projects
 
 chl_dir = '/Users/mhwood/Desktop/Chl'
 
-year = 2016
 
 XC, YC, Depth = read_model_domain(config_dir, 'L2_Upernavik')
 
@@ -165,7 +164,7 @@ reprojected_points = reproject_points(points, inputCRS=4326, outputCRS=3413)
 X = reprojected_points[:, 0].reshape(XC.shape)
 Y = reprojected_points[:, 1].reshape(YC.shape)
 
-for year in range(2017,2020):
+for year in range(2021,2022):
     dec_yrs, chl_grid = interpolate_obs_to_domain(chl_dir, year, XC, YC, X, Y, Depth)
 
     output_file = os.path.join(project_dir, 'Data','Observations','Chlorophyll',

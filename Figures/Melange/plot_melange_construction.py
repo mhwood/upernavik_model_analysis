@@ -95,7 +95,7 @@ def plot_iceberg_components(project_dir, model, XC, YC, Depth, berg_components):
 
     ax = fig.add_subplot(gs[:plot_height, 3*plot_width_small:4*plot_width_small])
     driftMask = berg_components['driftMask']
-    C = plt.pcolormesh(Cols, Rows, driftMask, cmap='Greys', vmin=0, vmax=1)
+    C = plt.pcolormesh(Cols, Rows, driftMask, cmap='Greens', vmin=0, vmax=1)
     plt.contour(Cols, Rows, Depth, levels=[0.1], colors='k', linewidths=0.5)
     plt.colorbar(C)
     plt.title('Drift Mask')
@@ -138,7 +138,7 @@ def plot_iceberg_components(project_dir, model, XC, YC, Depth, berg_components):
 
     ax = fig.add_subplot(gs[plot_height:2*plot_height,3*plot_width_small:4*plot_width_small])
     barrierMask = berg_components['barrierMask']
-    C = plt.pcolormesh(Cols, Rows, barrierMask, cmap='Greys', vmin=0, vmax=1)
+    C = plt.pcolormesh(Cols, Rows, barrierMask, cmap='Reds', vmin=0, vmax=1)
     plt.contour(Cols, Rows, Depth, levels=[0.1], colors='k', linewidths=0.5)
     plt.colorbar(C)
     plt.title('Barrier Mask')

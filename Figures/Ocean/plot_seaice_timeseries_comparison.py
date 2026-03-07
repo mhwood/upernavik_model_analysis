@@ -72,7 +72,7 @@ def compute_ticks_and_labels(years):
 def plot_timeseries(project_dir, obs_seaice_timeseries,
                     experiments, all_model_timeseries):
 
-    years = [2016]
+    years = [2021]
     x_ticks, x_tick_labels, x_grid_locations = compute_ticks_and_labels(years)
 
     fig = plt.figure(figsize=(8,6))
@@ -87,6 +87,7 @@ def plot_timeseries(project_dir, obs_seaice_timeseries,
 
         if experiment!='':
             seaice_timeseries = all_model_timeseries[experiment]
+            seaice_timeseries[seaice_timeseries[:,0]<2020,1]=np.nan
             ax0.plot(seaice_timeseries[:, 0], seaice_timeseries[:, 1], '-', color='b', label=experiment)
         ax0.plot(obs_seaice_timeseries[:, 0], obs_seaice_timeseries[:, 1], '-', color='k', label='Observations')
 
@@ -94,8 +95,8 @@ def plot_timeseries(project_dir, obs_seaice_timeseries,
         seaice_min = -0.1
         seaice_max = 1.25
         ax0.set_ylim([seaice_min,seaice_max])
-        ax0.set_xlim([2016, 2017])
-        ax0.text(2016.01,0.98*seaice_max,letters[e]+' '+experiment, ha='left', va='top', fontsize=12, color='black')
+        ax0.set_xlim([2021, 2022])
+        ax0.text(2021.01,0.98*seaice_max,letters[e]+' '+experiment, ha='left', va='top', fontsize=12, color='black')
 
         if e==0:
             ax0.set_title('Median Sea Ice Concentration in Upernavik')
@@ -130,7 +131,7 @@ data_folder = os.path.join(project_dir, 'Data', 'Observations')
 
 seaice_obs_timeseries = read_seaice_timeseries(data_folder)
 
-experiments = ['control','control_old','','']
+experiments = ['baseline','baseline_melange','baseline_iceplume','']
 all_model_timeseries = {}
 for experiment in experiments:
     if experiment != '':

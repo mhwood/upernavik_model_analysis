@@ -110,28 +110,45 @@ config_dir = '/Volumes/upernavik/Research/Ocean_Modeling/Projects/' \
 
 project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
 
-
 model_name = 'L2_Upernavik'
 metric = 'mean'
 
 XC, YC, Z, Depth, hFaC = read_grid_geometry_from_nc(config_dir, model_name)
 
-years = [2016]
 
-experiments = ['melange']
+experiments = ['baseline_melange','baseline_melange_iceplume']
+
+date_dict = {'baseline_melange':((2020,11),(2020,12)),
+             'baseline_melange_iceplume':((2020,11),(2020,12))}
+
 for experiment in experiments:
 
     print('  - Workin on year '+experiment)
     results_dir = os.path.join(config_dir, 'L2', model_name, 'results_' + experiment)
 
+    start_year = date_dict[experiment][0][0]
+    end_year = date_dict[experiment][1][0]
+    start_month = date_dict[experiment][0][1]
+    end_month = date_dict[experiment][1][1]
+
     n_days = 0
-    for year in years:
-        if year%4==0:
-            n_days+=366
+    for year in range(start_year, end_year+1):
+        if year==start_year:
+            start_m = start_month
         else:
-            n_days+=365
-        if year==2016:
-            n_days-=31 # no Jan this year
+            start_m = 1
+        if year==end_year:
+            end_m = end_month
+        else:
+            end_m = 12
+
+        for month in range(start_m, end_m+1):
+            if month==12:
+                n_days += (datetime.date(year+1, 1, 1) - datetime.date(year, month, 1)).days
+            else:
+                n_days += (datetime.date(year, month+1, 1) - datetime.date(year, month, 1)).days
+
+    print(n_days)
 
     dec_yrs = np.zeros((n_days,))
 
@@ -140,12 +157,17 @@ for experiment in experiments:
                       'Ussing Braeer':{'fwflx':np.zeros((n_days,)), 'htflx':np.zeros((n_days,)), 'mltrt':np.zeros((n_days,))}}
 
     counter = 0
-    for year in years:
-        if year==2016:
-            start_month = 2
+    for year in range(start_year, end_year + 1):
+        if year == start_year:
+            start_m = start_month
         else:
-            start_month = 1
-        for month in range(start_month,13):
+            start_m = 1
+        if year == end_year:
+            end_m = end_month
+        else:
+            end_m = 12
+
+        for month in range(start_m, end_m + 1):
             print('     - Reading in month '+str(month)+' in year '+str(year))
 
             month_iterations, all_month_timeseries = compute_timeseries(results_dir, metric, year, month, hFaC)

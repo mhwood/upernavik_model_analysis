@@ -74,7 +74,7 @@ project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysi
 
 first_file = True
 
-for year in range(2016,2021):
+for year in range(2016,2023):
     print('Reading year '+str(year))
 
     annual_timeseries = read_annual_mean_seaice_conc_timeseries(project_dir, year)

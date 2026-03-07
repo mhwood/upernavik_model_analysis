@@ -106,17 +106,20 @@ project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysi
 
 
 model_name = 'L2_Upernavik'
-var_name = 'Chl'
-metric = 'mean'
+var_name = 'SIarea'
+metric = 'median'
 
 depth_index = 6
 
 XC, YC, Z, Depth, hFaC = read_grid_geometry_from_nc(config_dir, model_name)
 depth = Z[depth_index]
 
-years = [2016]
+years = [2021]
 
-experiments = ['control']
+experiments = ['baseline', 'baseline_melange', 'baseline_iceplume']
+
+end_month_dict = {'baseline':6, 'baseline_melange':1, 'baseline_iceplume':2}
+
 for experiment in experiments:
 
     print('  - Workin on year '+experiment)
@@ -139,7 +142,7 @@ for experiment in experiments:
             start_month = 2
         else:
             start_month = 1
-        for month in range(start_month,13):
+        for month in range(start_month,end_month_dict[experiment]+1):
             print('     - Reading in month '+str(month)+' in year '+str(year))
 
             month_iterations, month_timeseries = compute_timeseries(results_dir, metric, var_name, year, month, depth_index, hFaC)

@@ -37,6 +37,11 @@ def read_melange_polygons_from_shapefile(config_dir, model_name):
 
     return melange_polygons
 
+def read_iceplume_mask(config_dir, model_name):
+    mask_file = os.path.join(config_dir, 'L2', model_name, 'input', 'iceplume', 'L2_iceplume_mask.bin')
+    mask = np.fromfile(mask_file, dtype='>f4').reshape((375, 450))
+    return mask
+
 def read_melange_fraction_and_rigidiy(project_dir, region):
     file_path = os.path.join(project_dir, 'Data', 'Observations','Melange', region+'_Landsat_8_Melange_Fraction.nc')
     ds = nc4.Dataset(file_path, 'r')
@@ -51,14 +56,14 @@ def read_melange_fraction_and_rigidiy(project_dir, region):
     melange_rigidity = ds.variables['rigidity_mask_fraction'][:, :]
     ds.close()
 
-    threshold=0.5
+    threshold=0.45
     melange_rigidity[melange_rigidity < threshold] = 0
     melange_rigidity[melange_rigidity >= threshold] = 1
     melange_rigidity[melange_fraction==0] = 0
 
     return melange_fraction, melange_rigidity, x, y
 
-def create_masks(XC, YC, Depth, hFacC, # melange_polygons,
+def create_masks(XC, YC, Depth, hFacC, iceplume_mask, # melange_polygons,
                  ussing_braeer_melange_fraction, ussing_braeer_melange_rigidity,
                  ussing_braeer_x_melange, ussing_braeer_y_melange,
                  kakivfaat_melange_fraction, kakivfaat_melange_rigidity,
@@ -141,19 +146,20 @@ def create_masks(XC, YC, Depth, hFacC, # melange_polygons,
     driftMask[hFacC[0, :, :] == 0] = 0  # Mask out land points
     driftMask[Depth < 50] = 0  # Mask out shallow points
 
-    # # Drift mask
-    # driftMask[np.logical_and(bergConc > 0, bergConc <= 80)] = 1  # Low conc bergs can drift
-    #
-    # # Barrier mask
-    # barrierMask[bergConc >= 80] = 1  # High conc bergs act as barriers
-
-    # # Drift mask
-    print('Only drifting in these files for testing')
-    driftMask[bergConc > 0] = 1  # All bergs drift
-    barrierMask[bergConc > 0] = 0  # No bergs act as barriers, for testing
+    # # # Drift mask
+    # print('Only drifting in these files for testing')
+    # driftMask[bergConc > 0] = 1  # All bergs drift
+    # barrierMask[bergConc > 0] = 0  # No bergs act as barriers, for testing
 
     # Melt mask, only let bergs melt in this region (make melt water, these don't change size)
     meltMask[bergMask==1] = 1  # Allow focus on blocking effect only
+
+    # mask out all of the iceplume plume cells
+    bergMask[np.abs(iceplume_mask)>1] = 0
+    bergConc[np.abs(iceplume_mask)>1] = 0
+    driftMask[np.abs(iceplume_mask)>1] = 0
+    meltMask[np.abs(iceplume_mask)>1] = 0
+    barrierMask[np.abs(iceplume_mask)>1] = 0
 
     return bergMask, bergConc, driftMask, meltMask, barrierMask
 
@@ -470,6 +476,8 @@ def create_L2_iceberg_files(config_dir, L2_model_name, print_level):
 
     XC, YC, dXC, dYC, Depth, rA, hFacC, delR = read_grid_geometry_from_nc(config_dir, L2_model_name)
 
+    iceplume_mask = read_iceplume_mask(config_dir, L2_model_name)
+
     # melange_polygons = read_melange_polygons_from_shapefile(config_dir, L2_model_name)
 
     ussing_braeer_melange_fraction, ussing_braeer_melange_rigidity, ussing_braeer_x_melange, ussing_braeer_y_melange =\
@@ -481,7 +489,7 @@ def create_L2_iceberg_files(config_dir, L2_model_name, print_level):
     upernavik_melange_fraction, upernavik_melange_rigidity, upernavik_x_melange, upernavik_y_melange =\
         read_melange_fraction_and_rigidiy(project_dir, 'Upernavik_Fjord')
 
-    iceberg_mask, iceberg_conc, drift_mask, melt_mask, barrier_mask = create_masks(XC, YC, Depth, hFacC, # melange_polygons,
+    iceberg_mask, iceberg_conc, drift_mask, melt_mask, barrier_mask = create_masks(XC, YC, Depth, hFacC, iceplume_mask, # melange_polygons,
                                                                                    ussing_braeer_melange_fraction, ussing_braeer_melange_rigidity,
                                                                                    ussing_braeer_x_melange, ussing_braeer_y_melange,
                                                                                    kakivfaat_melange_fraction, kakivfaat_melange_rigidity,

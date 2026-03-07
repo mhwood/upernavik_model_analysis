@@ -11,13 +11,19 @@ from datetime import datetime, timedelta, date
 import gsw
 from scipy.interpolate import interp1d
 
-def YMD_to_DecYr(year,month,day,hour=0,minute=0,second=0):
-    this_date = datetime(year,month,day,hour,minute,second)
-    start = date(this_date.year, 1, 1).toordinal()
-    year_length = date(this_date.year+1, 1, 1).toordinal() - start
-    decimal_fraction = float(this_date.toordinal() - start) / year_length
-    dec_yr = year+decimal_fraction
-    return(dec_yr)
+
+def YMD_to_DecYr(date):
+
+    start_of_year = datetime(date.year, 1, 1, 0, 0, 0)
+    start_of_next_year = datetime(date.year + 1, 1, 1, 0, 0, 0)
+
+    year_length = (start_of_next_year - start_of_year).total_seconds()
+    seconds_into_year = (date - start_of_year).total_seconds()
+
+    decimal_fraction = seconds_into_year / year_length
+    dec_yr = date.year + decimal_fraction
+
+    return dec_yr
 
 def read_float_profiles(project_folder, float_ID):
 
@@ -37,7 +43,8 @@ def read_float_profiles(project_folder, float_ID):
             year = int(file_name.split('_')[0][:4])
             month = int(file_name.split('_')[0][4:6])
             day = int(file_name.split('_')[0][6:8])
-            dec_yrs[counter] = YMD_to_DecYr(year,month,day)
+            date = datetime(year, month, day)
+            dec_yrs[counter] = YMD_to_DecYr(date)
 
             counter+=1
 
@@ -57,13 +64,15 @@ def great_circle_distance(lon_ref, lat_ref, Lon, Lat):
     h = 2 * earth_radius * np.arcsin(np.sqrt(d))
     return(h)
 
-def read_L2_CTD_dv_float_output(config_dir):
+def read_L2_CTD_dv_float_output(config_dir,date_range):
 
-    months = np.arange(2,12).tolist()
+    year = date_range[0][0]
+    start_month = date_range[0][1]
+    end_month = date_range[1][1]
 
-    for month in months:
+    for month in range(start_month, end_month+1):
         theta_file = os.path.join(config_dir,'L2','L2_Upernavik','results_baseline', 'dv', 'CTD',
-                                   'THETA', 'THETA_2016'+'{:02d}'.format(month)+'.nc')
+                                   'THETA', 'THETA_'+str(year)+'{:02d}'.format(month)+'.nc')
         ds = nc4.Dataset(theta_file)
         depth = ds.variables['depths'][:]
         Theta = ds.variables['THETA'][:, :, :]
@@ -72,18 +81,21 @@ def read_L2_CTD_dv_float_output(config_dir):
         ds.close()
 
         salt_file = os.path.join(config_dir,'L2','L2_Upernavik','results_baseline', 'dv', 'CTD',
-                                 'SALT', 'SALT_2016'+'{:02d}'.format(month)+'.nc')
+                                 'SALT', 'SALT_'+str(year)+'{:02d}'.format(month)+'.nc')
         ds = nc4.Dataset(salt_file)
         Salt = ds.variables['SALT'][:, :, :]
         ds.close()
 
         dec_yrs = []
-        for day in range(1,np.shape(Theta)[0]+1):
-            dec_yr = YMD_to_DecYr(2016, month, day)
+        elapsed_hours = 0
+        for step in range(1,np.shape(Theta)[0]+1):
+            date = datetime(year, month, 1) + timedelta(hours=elapsed_hours)
+            dec_yr = YMD_to_DecYr(date)
             dec_yrs.append(dec_yr)
+            elapsed_hours += 6
         dec_yrs = np.array(dec_yrs)
 
-        if month == months[0]:
+        if month == start_month:
             theta_timeseries = Theta
             salt_timeseries = Salt
             all_dec_yrs = dec_yrs
@@ -96,7 +108,8 @@ def read_L2_CTD_dv_float_output(config_dir):
     lat = 73.257333
     dist = great_circle_distance(lon, lat, longitude.ravel(), latitude.ravel())
     min_dist_index = np.where(dist==np.min(dist))[0][0]
-    print('Closest model grid point is %.1f m away from float location' % np.min(dist))
+    if month == start_month:
+        print('Closest model grid point is %.1f m away from float location' % np.min(dist))
 
     theta_timeseries = theta_timeseries[:, :, min_dist_index]
     salt_timeseries = salt_timeseries[:, :, min_dist_index]
@@ -114,7 +127,8 @@ def format_axes(ax, min_dec_yr, max_dec_yr, letter='a'):
     year = int(np.floor(min_dec_yr))
     for yr in range(year, int(np.ceil(max_dec_yr))):
         for month in range(1,13):
-            dec_yr = YMD_to_DecYr(yr,month,1)
+            date = datetime(yr, month, 1)
+            dec_yr = YMD_to_DecYr(date)
             if dec_yr>=min_dec_yr and dec_yr<=max_dec_yr:
                 month_dec_yrs.append(dec_yr)
                 if month==1:
@@ -138,7 +152,7 @@ def format_axes(ax, min_dec_yr, max_dec_yr, letter='a'):
 def plot_float_data(project_folder,
                     profiles_F9186, dec_yrs_F9186,
                     model_depth, model_dec_yrs,
-                    theta_timeseries_control, salt_timeseries_control
+                    theta_timeseries_baseline, salt_timeseries_baseline
                     ):
 
     fig = plt.figure(figsize=(10,10))
@@ -160,7 +174,7 @@ def plot_float_data(project_folder,
         depth = profiles_F9186[p][:,0]
         ax11.pcolormesh(time,depth,profile,cmap='turbo', vmin=tmin, vmax=tmax)
 
-    ax11.text(2021 + 10 / 365.25, 475, '2023 (Argo Float Profiles)', color='black', ha='left', va='bottom',
+    ax11.text(2021 + 10 / 365.25, 950, 'Float Profiles', color='black', ha='left', va='bottom',
               bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.2'))
     # ax11.text(np.min(dec_yrs_F10052)-10/365.25, 475, 'Float F9186', color='black', ha='right', va='bottom',
     #         bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.2'))
@@ -193,18 +207,18 @@ def plot_float_data(project_folder,
     format_axes(ax12, 2021, 2022, letter='b')
 
     ##########################################################################################
-    # 2008
+    # baseline model output
 
     ax21 = fig.add_subplot(gs[plot_rows:2*plot_rows, :plot_cols])
     # print(np.shape(dec_yrs_2008), np.shape(d))
-    ax21.pcolormesh(model_dec_yrs, model_depth, theta_timeseries_control.T, cmap='turbo', vmin=tmin, vmax=tmax)
-    format_axes(ax21, min_dec_yr=2016, max_dec_yr=2017, letter='c')
-    ax21.text(2016 + 10 / 365.25, 475, '2008 (Model)', color='black', ha='left', va='bottom',
+    ax21.pcolormesh(model_dec_yrs, model_depth, theta_timeseries_baseline.T, cmap='turbo', vmin=tmin, vmax=tmax)
+    format_axes(ax21, min_dec_yr=2021, max_dec_yr=2022, letter='c')
+    ax21.text(2021 + 10 / 365.25, 950, 'Control Model', color='black', ha='left', va='bottom',
               bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.2'))
 
     ax22 = fig.add_subplot(gs[plot_rows:2 * plot_rows, plot_cols:])
-    ax22.pcolormesh(model_dec_yrs, model_depth, salt_timeseries_control.T, cmap='viridis', vmin=smin, vmax=smax)
-    format_axes(ax22, min_dec_yr=2016, max_dec_yr=2017, letter='d')
+    ax22.pcolormesh(model_dec_yrs, model_depth, salt_timeseries_baseline.T, cmap='viridis', vmin=smin, vmax=smax)
+    format_axes(ax22, min_dec_yr=2021, max_dec_yr=2022, letter='d')
     ax22.set_yticklabels([])
 
     # ##########################################################################################
@@ -224,17 +238,17 @@ def plot_float_data(project_folder,
     # ax32.set_yticklabels([])
     #
     # ##########################################################################################
-    # # 2017
+    # # 2022
     #
     # ax41 = fig.add_subplot(gs[3*plot_rows:4 * plot_rows, :plot_cols])
-    # ax41.pcolormesh(dec_yrs_2017, model_depth, Theta_2017, cmap='turbo', vmin=tmin, vmax=tmax)
-    # format_axes(ax41, year=2017,letter='g')
-    # ax41.text(2017 + 10 / 365.25, 475, '2017 (Model)', color='black', ha='left', va='bottom',
+    # ax41.pcolormesh(dec_yrs_2022, model_depth, Theta_2022, cmap='turbo', vmin=tmin, vmax=tmax)
+    # format_axes(ax41, year=2022,letter='g')
+    # ax41.text(2022 + 10 / 365.25, 475, '2022 (Model)', color='black', ha='left', va='bottom',
     #           bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.2'))
     #
     # ax42 = fig.add_subplot(gs[3*plot_rows:4 * plot_rows, plot_cols:])
-    # ax42.pcolormesh(dec_yrs_2017, model_depth, Salt_2017, cmap='viridis', vmin=smin, vmax=smax)
-    # format_axes(ax42, year=2017,letter='h')
+    # ax42.pcolormesh(dec_yrs_2022, model_depth, Salt_2022, cmap='viridis', vmin=smin, vmax=smax)
+    # format_axes(ax42, year=2022,letter='h')
     # ax42.set_yticklabels([])
     #
     # ##########################################################################################
@@ -277,34 +291,37 @@ def plot_float_data(project_folder,
     plt.close(fig)
 
 
+home_dir = os.path.expanduser('~')
 
+project_folder = home_dir+'/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
 
-project_folder = '/Users/mike/Documents/Research/Projects/Greenland Model Analysis/Fjord/Upernavik'
+config_dir = '/Volumes/upernavik/Research/Ocean_Modeling/Projects/Downscale_Darwin/darwin3/configurations/downscale_darwin'
 
-config_dir = '/Users/mike/Documents/Research/Projects/Ocean_Modeling/Projects/Downscale_Darwin/MITgcm/' \
-             'configurations/downscale_darwin'
-
+date_dictionary = {'baseline':[(2021,1),(2021,4)],
+                   'baseline_melange':[(2021,1),(2021,1)],
+                   'baseline_iceplume':[(2021,1),(2021,2)],
+                   'baseline_melange_iceplume':[(2021,1),(2021,1)]}
 
 profiles_F9186, dec_yrs_F9186 = read_float_profiles(project_folder, float_ID = 'F9186')
 
 # iceplume = False
 # dec_yrs_2008, depth, Theta_2008 = read_model_data(project_folder, 2008, 'Theta', iceplume)
 # dec_yrs_2012, _, Theta_2012 = read_model_data(project_folder, 2012, 'Theta', iceplume)
-# dec_yrs_2017, _, Theta_2017 = read_model_data(project_folder, 2017, 'Theta', iceplume)
+# dec_yrs_2022, _, Theta_2022 = read_model_data(project_folder, 2022, 'Theta', iceplume)
 # dec_yrs_2019, _, Theta_2019 = read_model_data(project_folder, 2019, 'Theta', iceplume)
 # 
 # _, model_depth, Salt_2008 = read_model_data(project_folder, 2008, 'Salt', iceplume)
 # _, _, Salt_2012 = read_model_data(project_folder, 2012, 'Salt', iceplume)
-# _, _, Salt_2017 = read_model_data(project_folder, 2017, 'Salt', iceplume)
+# _, _, Salt_2022 = read_model_data(project_folder, 2022, 'Salt', iceplume)
 # _, _, Salt_2019 = read_model_data(project_folder, 2019, 'Salt', iceplume)
 
-model_depth, model_dec_yrs, theta_timeseries_control, salt_timeseries_control =\
-    read_L2_CTD_dv_float_output(config_dir)
+model_depth, model_dec_yrs, theta_timeseries_baseline, salt_timeseries_baseline =\
+    read_L2_CTD_dv_float_output(config_dir, date_dictionary['baseline'])
 
 plot_float_data(project_folder,
                 profiles_F9186, dec_yrs_F9186,
                 model_depth, model_dec_yrs,
-                theta_timeseries_control, salt_timeseries_control)
+                theta_timeseries_baseline, salt_timeseries_baseline)
 
 
 

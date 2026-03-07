@@ -112,14 +112,12 @@ project_dir = '/Users/mhwood/Documents/Research/Projects/Greenland Model Analysi
 model_name = 'L2_Upernavik'
 var_name = 'Chl'
 
-year = 2016
-month = 8
-depth_index = 7
+year = 2021
 
 
 experiments = ['control']
 for experiment in experiments:
-    for month in range(6,10):
+    for month in range(1,12):
 
         Lon, Lat, X, Y, chl_map = compute_Chl_map(project_dir, year, month)
 
